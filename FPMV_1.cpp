@@ -3,18 +3,46 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <math.h>
 #include <iostream>
+#include <wiringPi.h>
 
 using namespace cv;
 using namespace std;
 
-void main()
+#define PWM1	12
+#define PWM2	13
+#define led		0
+int speed = 256;
+
+void belok_kanan()
 {
+	pwmWrite(PWM1, speed);
+	pwmWrite(PWM2, 0);
+}
+void belok_kiri()
+{
+	pwmWrite(PWM1, 0);
+	pwmWrite(PWM2, speed);
+}
+void lurus()
+{
+	pwmWrite(PWM1, speed);
+	pwmWrite(PWM2, speed);
+}
+int main()
+{
+	//USe Wiringpi Setup
+	wiringPiSetupGpio();
+	//define pin mode
+	pinMode (PWM1, PWM_OUTPUT) ;
+	pinMode (PWM2, PWM_OUTPUT) ;
+	pinMode (led, OUTPUT) ;
+	
 	namedWindow("Original", cv::WINDOW_AUTOSIZE);
 	namedWindow("HSV", cv::WINDOW_AUTOSIZE);
 	namedWindow("Dilation Demo", WINDOW_AUTOSIZE);
 
-	//VideoCapture cap;  cap.open(0);
-	VideoCapture cap("mvanjay.mp4");
+	VideoCapture cap;  cap.open(0);
+	//VideoCapture cap("mvanjay.mp4");
 	Mat frame;  cv::Mat gray;
 	Mat garis;
 	Mat hsv, garis_hsv;
@@ -36,10 +64,14 @@ void main()
 		cvtColor(frame, hsv, COLOR_BGR2HSV);
 		inRange(hsv, Scalar(80, 100, 0), Scalar(120, 255, 255), garis_hsv);
 		//morph program
+		Mat element3 = getStructuringElement(MORPH_ELLIPSE,
+			Size(2 * 3 + 1, 2 * 3 + 1),
+			Point(3, 3));
+		erode(garis_hsv, dilation_dst, element3);
 		Mat element = getStructuringElement(MORPH_ELLIPSE,
 			Size(2 * 5 + 1, 2 * 5 + 1),
 			Point(5, 5));
-		dilate(garis_hsv, dilation_dst, element);
+		dilate(dilation_dst, dilation_dst, element);
 		Mat element2 = getStructuringElement(MORPH_ELLIPSE,
 			Size(2 * 3 + 1, 2 * 3 + 1),
 			Point(3, 3));
@@ -62,10 +94,26 @@ void main()
 				//cout << "Point(x,y)=" << koordinat << endl; // debug koordinat
 				if (koordinat.y < 80)
 				{
-					if (koordinat.x < batas_belok_kanan && koordinat.x > batas_belok_kiri) cout << "lurus" << endl;
-					else if (koordinat.x >= batas_belok_kanan) cout << "belok kanan" << endl;
-					else if (koordinat.x <= batas_belok_kiri) cout << "belok kiri" << endl;
-					else cout << "LOST" << endl;
+					if (koordinat.x < batas_belok_kanan && koordinat.x > batas_belok_kiri)
+					{
+						cout << "lurus" << endl; 
+						lurus();
+					}
+					else if (koordinat.x >= batas_belok_kanan) 
+					{
+						cout << "belok kanan" << endl;
+						belok_kanan();
+					}
+					else if (koordinat.x <= batas_belok_kiri) 
+					{
+						cout << "belok kiri" << endl;
+						belok_kiri();
+					}
+					else 
+					{
+						cout << "LOST" << endl;
+						belok_kanan();
+					}
 				}
 			}
 			//Program detek lubang
@@ -74,10 +122,12 @@ void main()
 			if (luas_blop > batas_min_lubang&& luas_blop < batas_max_lubang)
 			{
 				cond = true;
+				digitalWrite(led,HIGH);
 			}
 			else if (luas_blop > batas_max_lubang + 100)
 			{
 				cond = false;
+				digitalWrite(led,LOW);
 			}
 			if (cond == true) cout << "ada lubang" << endl;
 			else cout << "Tidak ada lubang" << endl;
@@ -88,4 +138,5 @@ void main()
 		imshow("Dilation Demo", dilation_dst);
 		if (cv::waitKey(33) >= 0) break;
 	}
+	return 0;
 }
