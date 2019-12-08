@@ -11,11 +11,11 @@ using namespace std;
 #define PWM1	12
 #define PWM2	13
 #define led		0
-int speed = 256;
+int speed = 420;// best 420
 
 void belok_kanan()
 {
-	pwmWrite(PWM1, speed);
+	pwmWrite(PWM1, speed+30);
 	pwmWrite(PWM2, 0);
 }
 void belok_kiri()
@@ -25,8 +25,13 @@ void belok_kiri()
 }
 void lurus()
 {
-	pwmWrite(PWM1, speed);
+	pwmWrite(PWM1, speed+30);
 	pwmWrite(PWM2, speed);
+}
+void stop()
+{
+	pwmWrite(PWM1, 0);
+	pwmWrite(PWM2, 0);
 }
 int main()
 {
@@ -52,9 +57,13 @@ int main()
 	int luas_blop;
 	int batas_belok_kanan = 140;
 	int batas_belok_kiri = 100;
-	int batas_max_lubang = 2130;
-	int batas_min_lubang = 2000;
+	int batas_max_lubang = 400;
+	int batas_min_lubang = 200;
+	int batas_tidak_ada_lubang = 600;
 	bool cond = false;
+	bool stop_sementara = false;
+	int save_state = 0;
+	int ulang = 0;
 
 	for (;;)
 	{
@@ -62,7 +71,7 @@ int main()
 		if (frame.empty()) break;
 		resize(frame, frame, Size(240, 160), 0, 0, INTER_CUBIC);
 		cvtColor(frame, hsv, COLOR_BGR2HSV);
-		inRange(hsv, Scalar(80, 100, 0), Scalar(120, 255, 255), garis_hsv);
+		inRange(hsv, Scalar(40, 20, 0), Scalar(160, 255, 255), garis_hsv);
 		//morph program
 		Mat element3 = getStructuringElement(MORPH_ELLIPSE,
 			Size(2 * 3 + 1, 2 * 3 + 1),
@@ -96,41 +105,56 @@ int main()
 				{
 					if (koordinat.x < batas_belok_kanan && koordinat.x > batas_belok_kiri)
 					{
-						cout << "lurus" << endl; 
+						//cout << "lurus" << endl; 
 						lurus();
 					}
 					else if (koordinat.x >= batas_belok_kanan) 
 					{
-						cout << "belok kanan" << endl;
+						//cout << "belok kanan" << endl;
 						belok_kanan();
+						save_state = 0;
 					}
 					else if (koordinat.x <= batas_belok_kiri) 
 					{
-						cout << "belok kiri" << endl;
+						//cout << "belok kiri" << endl;
 						belok_kiri();
-					}
-					else 
-					{
-						cout << "LOST" << endl;
-						belok_kanan();
+						save_state = 1;
 					}
 				}
+				else 
+					{
+						//cout << "LOST" << endl;
+						if(save_state == 0) belok_kiri();
+						else belok_kanan();
+					}
 			}
 			//Program detek lubang
 			luas_blop = contourArea(contours[i], false);
-			//cout << luas_blop << endl; // debug luas kabel
+			cout << luas_blop << endl; // debug luas kabel
 			if (luas_blop > batas_min_lubang&& luas_blop < batas_max_lubang)
 			{
-				cond = true;
-				digitalWrite(led,HIGH);
+				ulang++;
+				if(ulang>10)
+				{
+					cond = true;
+					digitalWrite(led,HIGH);
+					cout << "ada lubang" << endl;
+					if(stop_sementara == false)
+					{
+						stop();
+						delay(1000);
+						stop_sementara = true;
+					}
+				}
 			}
-			else if (luas_blop > batas_max_lubang + 100)
+			else if (luas_blop > batas_tidak_ada_lubang)
 			{
+				ulang = 0;
 				cond = false;
 				digitalWrite(led,LOW);
+				cout << "Tidak ada lubang" << endl;
+				stop_sementara = false;
 			}
-			if (cond == true) cout << "ada lubang" << endl;
-			else cout << "Tidak ada lubang" << endl;
 		}
 		bitwise_and(frame, drawing, frame);
 		imshow("Original", frame);
@@ -138,5 +162,6 @@ int main()
 		imshow("Dilation Demo", dilation_dst);
 		if (cv::waitKey(33) >= 0) break;
 	}
+	stop();
 	return 0;
 }
